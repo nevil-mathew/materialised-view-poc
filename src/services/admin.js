@@ -94,6 +94,20 @@ const materializedViewQueryBuilder = async (model, concreteFields, metaFields) =
 	}
 };
 
+const createIndexesOnAllowFilteringFields = async (modelEntityTypes) => {
+	try {
+		await Promise.all(
+			modelEntityTypes.entityTypeValueList.map(async (attribute) => {
+				return await sequelize.query(
+					`CREATE INDEX idx_${attribute} ON m_${modelEntityTypes.modelName} (${attribute});`
+				);
+			})
+		);
+	} catch (err) {
+		console.log(err);
+	}
+};
+
 const generateMaterializedView = async (modelEntityTypes) => {
 	try {
 		//console.log('MODEL ENTITY TYPES:', modelEntityTypes);
@@ -115,6 +129,7 @@ const generateMaterializedView = async (modelEntityTypes) => {
 		const materializedViewGenerationQuery = await materializedViewQueryBuilder(model, concreteFields, metaFields);
 		console.log(materializedViewGenerationQuery);
 		await sequelize.query(materializedViewGenerationQuery);
+		await createIndexesOnAllowFilteringFields(modelEntityTypes);
 	} catch (err) {
 		console.log(err);
 	}
