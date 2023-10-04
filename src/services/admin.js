@@ -72,10 +72,21 @@ const rawAttributesTypeModifier = async (rawAttributes) => {
 	}
 };
 
+const generateRandomCode = (length) => {
+	const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+	let result = '';
+	for (let i = 0; i < length; i++) {
+		const randomIndex = Math.floor(Math.random() * charset.length);
+		result += charset[randomIndex];
+	}
+	return result;
+};
+
 const materializedViewQueryBuilder = async (model, concreteFields, metaFields) => {
 	try {
 		const tableName = model.tableName;
-		const queryString = `CREATE MATERIALIZED VIEW m_${tableName} AS
+		const temporaryMaterializedViewName = `m_${tableName}_${generateRandomCode(8)}`;
+		const materializedViewGenerationQuery = `CREATE MATERIALIZED VIEW ${temporaryMaterializedViewName} AS
         SELECT 
             ${await concreteFields
 				.map((data) => {
@@ -88,23 +99,52 @@ const materializedViewQueryBuilder = async (model, concreteFields, metaFields) =
 				})
 				.join(',\n')}
         FROM public."${tableName}";`;
-		return queryString;
+		return { materializedViewGenerationQuery, temporaryMaterializedViewName };
 	} catch (err) {
 		console.log(err);
 	}
 };
 
-const createIndexesOnAllowFilteringFields = async (modelEntityTypes) => {
+const createIndexesOnAllowFilteringFields = async (model, modelEntityTypes) => {
 	try {
 		await Promise.all(
 			modelEntityTypes.entityTypeValueList.map(async (attribute) => {
-				return await sequelize.query(
-					`CREATE INDEX idx_${attribute} ON m_${modelEntityTypes.modelName} (${attribute});`
-				);
+				return await sequelize.query(`CREATE INDEX idx_${attribute} ON m_${model.tableName} (${attribute});`);
 			})
 		);
 	} catch (err) {
 		console.log(err);
+	}
+};
+
+const deleteMaterializedView = async (viewName) => {
+	try {
+		await sequelize.query(`DROP MATERIALIZED VIEW ${viewName};`);
+	} catch (err) {
+		console.log(err);
+	}
+};
+
+const renameMaterializedView = async (temporaryMaterializedViewName, tableName) => {
+	const t = await sequelize.transaction();
+	try {
+		let randomViewName = `m_${tableName}_${generateRandomCode(8)}`;
+		//const checkOriginalViewQuery = `SELECT EXISTS (SELECT 1 FROM pg_materialized_views WHERE viewname = 'm_${tableName}');`;
+		const checkOriginalViewQuery = `SELECT COUNT(*) from pg_matviews where matviewname = 'm_${tableName}';`;
+		const renameOriginalViewQuery = `ALTER MATERIALIZED VIEW m_${tableName} RENAME TO ${randomViewName};`;
+		const renameNewViewQuery = `ALTER MATERIALIZED VIEW ${temporaryMaterializedViewName} RENAME TO m_${tableName};`;
+
+		const temp = await sequelize.query(checkOriginalViewQuery);
+		console.log('VIEW EXISTS: ', temp[0][0].count);
+		if (temp[0][0].count > 0) await sequelize.query(renameOriginalViewQuery, { transaction: t });
+		else randomViewName = null;
+		await sequelize.query(renameNewViewQuery, { transaction: t });
+		await t.commit();
+		console.log('Transaction committed successfully');
+		return randomViewName;
+	} catch (error) {
+		await t.rollback();
+		console.error('Error executing transaction:', error);
 	}
 };
 
@@ -126,10 +166,17 @@ const generateMaterializedView = async (modelEntityTypes) => {
 			.filter(Boolean);
 		/* console.log('MODIFIED TYPES: ', concreteFields);
 		console.log('META FIELDS: ', metaFields); */
-		const materializedViewGenerationQuery = await materializedViewQueryBuilder(model, concreteFields, metaFields);
-		console.log(materializedViewGenerationQuery);
+		const { materializedViewGenerationQuery, temporaryMaterializedViewName } = await materializedViewQueryBuilder(
+			model,
+			concreteFields,
+			metaFields
+		);
+		console.log('QUERRRRRRRRRRRRRRRRY:', materializedViewGenerationQuery);
 		await sequelize.query(materializedViewGenerationQuery);
-		await createIndexesOnAllowFilteringFields(modelEntityTypes);
+		console.log('GENERATEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD');
+		const randomViewName = await renameMaterializedView(temporaryMaterializedViewName, model.tableName);
+		if (randomViewName) await deleteMaterializedView(randomViewName);
+		await createIndexesOnAllowFilteringFields(model, modelEntityTypes);
 	} catch (err) {
 		console.log(err);
 	}
