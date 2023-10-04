@@ -1,0 +1,15 @@
+'use strict';
+require('module-alias/register');
+require('dotenv').config();
+const { generateMetaRows } = require('@utils/getMetaRows');
+
+/** @type {import('sequelize-cli').Migration} */
+module.exports = {
+	async up(queryInterface, Sequelize) {
+		return queryInterface.bulkInsert('Meta', generateMetaRows(100000));
+	},
+
+	async down(queryInterface, Sequelize) {
+		return queryInterface.bulkDelete('Meta', null, {});
+	},
+};

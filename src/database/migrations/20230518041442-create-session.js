@@ -1,0 +1,106 @@
+'use strict';
+/** @type {import('sequelize-cli').Migration} */
+module.exports = {
+	async up(queryInterface, Sequelize) {
+		await queryInterface.createTable(
+			'sessions',
+			{
+				id: {
+					allowNull: false,
+					autoIncrement: true,
+					primaryKey: true,
+					type: Sequelize.INTEGER,
+				},
+				title: {
+					type: Sequelize.STRING,
+				},
+				description: {
+					type: Sequelize.STRING,
+				},
+				recommended_for: {
+					type: Sequelize.ARRAY(Sequelize.JSON),
+				},
+				categories: {
+					type: Sequelize.ARRAY(Sequelize.JSON),
+				},
+				medium: {
+					type: Sequelize.ARRAY(Sequelize.JSON),
+				},
+				images: {
+					type: Sequelize.ARRAY(Sequelize.STRING),
+				},
+				mentor_id: {
+					type: Sequelize.INTEGER,
+				},
+				session_reschedule_count: {
+					type: Sequelize.INTEGER,
+				},
+				status: {
+					type: Sequelize.STRING,
+				},
+				time_zone: {
+					type: Sequelize.STRING,
+				},
+				start_date: {
+					type: Sequelize.DATE,
+				},
+				end_date: {
+					type: Sequelize.DATE,
+				},
+				mentee_password: {
+					type: Sequelize.STRING,
+				},
+				mentor_password: {
+					type: Sequelize.STRING,
+				},
+				started_at: {
+					type: Sequelize.DATE,
+				},
+				share_link: {
+					type: Sequelize.STRING,
+				},
+				completed_at: {
+					type: Sequelize.DATE,
+				},
+				is_feedback_skipped: {
+					type: Sequelize.BOOLEAN,
+				},
+				mentee_feedback_questionset: {
+					type: Sequelize.STRING,
+				},
+				mentor_feedback_questionset: {
+					type: Sequelize.STRING,
+				},
+				meeting_info: {
+					type: Sequelize.JSON,
+				},
+				meta: {
+					type: Sequelize.JSONB,
+				},
+				visibility: {
+					type: Sequelize.STRING,
+				},
+				organisation_ids: {
+					type: Sequelize.ARRAY(Sequelize.STRING),
+				},
+				mentor_org_id: {
+					type: Sequelize.INTEGER,
+				},
+				created_at: {
+					allowNull: false,
+					type: Sequelize.DATE,
+				},
+				updated_at: {
+					allowNull: false,
+					type: Sequelize.DATE,
+				},
+			},
+			{
+				paranoid: true,
+			}
+		);
+	},
+	async down(queryInterface, Sequelize) {
+		await queryInterface.dropTable('sessions');
+	},
+};
