@@ -3,7 +3,7 @@
 		"username": "postgres",
 		"password": "password",
 		"database": "postgres",
-		"host": "172.20.0.3",
+		"host": "citus",
 		"dialect": "postgres",
 		"define": {
 			"underscored": true,

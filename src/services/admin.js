@@ -148,6 +148,20 @@ const renameMaterializedView = async (temporaryMaterializedViewName, tableName) 
 	}
 };
 
+const createViewUniqueIndexOnPK = async (model) => {
+	try {
+		const primaryKeys = model.primaryKeyAttributes;
+		/* CREATE UNIQUE INDEX unique_index_name
+ON my_materialized_view (column1, column2); */
+		const result = await sequelize.query(`
+            CREATE UNIQUE INDEX unique_index${primaryKeys.map((key) => `_${key}`)} 
+            ON m_${model.tableName} (${primaryKeys.map((key) => `${key}`).join(', ')});`);
+		console.log('UNIQUE RESULT: ', result);
+	} catch (err) {
+		console.log(err);
+	}
+};
+
 const generateMaterializedView = async (modelEntityTypes) => {
 	try {
 		//console.log('MODEL ENTITY TYPES:', modelEntityTypes);
@@ -177,6 +191,20 @@ const generateMaterializedView = async (modelEntityTypes) => {
 		const randomViewName = await renameMaterializedView(temporaryMaterializedViewName, model.tableName);
 		if (randomViewName) await deleteMaterializedView(randomViewName);
 		await createIndexesOnAllowFilteringFields(model, modelEntityTypes);
+		await createViewUniqueIndexOnPK(model);
+	} catch (err) {
+		console.log(err);
+	}
+};
+
+const getAllowFilteringEntityTypes = async () => {
+	try {
+		return await entityTypeQueries.findAllEntityTypes(
+			{
+				allow_filtering: true,
+			},
+			['id', 'value', 'label', 'data_type', 'org_id', 'has_entities', 'model_names']
+		);
 	} catch (err) {
 		console.log(err);
 	}
@@ -184,12 +212,7 @@ const generateMaterializedView = async (modelEntityTypes) => {
 
 const triggerViewBuild = async () => {
 	try {
-		const allowFilteringEntityTypes = await entityTypeQueries.findAllEntityTypes(
-			{
-				allow_filtering: true,
-			},
-			['id', 'value', 'label', 'data_type', 'org_id', 'has_entities', 'model_names']
-		);
+		const allowFilteringEntityTypes = await getAllowFilteringEntityTypes();
 		console.log(allowFilteringEntityTypes);
 		const entityTypesGroupedByModel = await groupByModelNames(allowFilteringEntityTypes);
 		await Promise.all(
@@ -203,8 +226,71 @@ const triggerViewBuild = async () => {
 	}
 };
 
+////////////////////////////////////////////////////////////////////////////////////
+//Refresh Flow
+
+const modelNameCollector = async (entityTypes) => {
+	try {
+		const modelSet = new Set();
+		await Promise.all(
+			entityTypes.map(async ({ model_names }) => {
+				console.log(model_names);
+				if (model_names && Array.isArray(model_names))
+					await Promise.all(
+						model_names.map((model) => {
+							if (!modelSet.has(model)) modelSet.add(model);
+						})
+					);
+			})
+		);
+		console.log(modelSet);
+		return [...modelSet.values()];
+	} catch (err) {
+		console.log(err);
+	}
+};
+
+const refreshMaterializedView = async (modelName) => {
+	try {
+		const model = require('@database/models/index')[modelName];
+		const [result, metadata] = await sequelize.query(`REFRESH MATERIALIZED VIEW CONCURRENTLY m_${model.tableName}`);
+		console.log(result, metadata);
+	} catch (err) {
+		console.log(err);
+	}
+};
+
+const refreshNextView = (currentIndex, modelNames) => {
+	try {
+		if (currentIndex < modelNames.length) {
+			refreshMaterializedView(modelNames[currentIndex]);
+			currentIndex++;
+		} else currentIndex = 0;
+		return currentIndex;
+	} catch (err) {
+		console.log(err);
+	}
+};
+
+const triggerPeriodicViewRefresh = async () => {
+	try {
+		const allowFilteringEntityTypes = await getAllowFilteringEntityTypes();
+		const modelNames = await modelNameCollector(allowFilteringEntityTypes);
+		console.log('MODEL NAME: ', modelNames);
+		const interval = 10 * 60 * 1000;
+		let currentIndex = 0;
+		setInterval(() => {
+			currentIndex = refreshNextView(currentIndex, modelNames);
+		}, interval / modelNames.length);
+		currentIndex = refreshNextView(currentIndex, modelNames);
+	} catch (err) {
+		console.log(err);
+	}
+};
+
 const adminService = {
 	triggerViewBuild,
+	triggerPeriodicViewRefresh,
 };
 
 module.exports = adminService;

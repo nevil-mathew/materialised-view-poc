@@ -22,3 +22,12 @@ exports.triggerViewRebuild = async (req, res) => {
 		console.log(err);
 	}
 };
+
+exports.triggerPeriodicViewRefresh = async (req, res) => {
+	try {
+		await adminService.triggerPeriodicViewRefresh();
+		res.send({ message: 'Triggered' });
+	} catch (err) {
+		console.log(err);
+	}
+};
